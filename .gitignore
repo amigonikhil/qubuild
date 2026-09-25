@@ -1,0 +1,15 @@
+# Never commit these.
+qubuild.db
+qubuild.db-wal
+qubuild.db-shm
+progress.json
+.tutor_model.json
+.ibm_token.json
+.qbraid_token.json
+.streamlit/secrets.toml
+
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.DS_Store

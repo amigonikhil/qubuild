@@ -1,0 +1,25 @@
+# QuBuild — what a host needs to install.
+#
+# The first three are the platform itself. Everything below them is a
+# simulator: install it and that backend appears in Circuit Studio and really
+# executes circuits; leave it out and QuBuild still runs, with fewer engines.
+#
+# All four SDKs together install to roughly 500 MB once their shared
+# dependencies (scipy, pandas) are counted. That fits a free Streamlit
+# Community Cloud app. If the build times out, comment out cirq-core and
+# pennylane first — but note that the cross-SDK check, which is the thing
+# nobody else does, needs them to be genuinely worth showing.
+
+streamlit>=1.32
+numpy>=1.24
+matplotlib>=3.7
+
+qiskit>=1.0
+qiskit-aer>=0.14
+cirq-core>=1.3
+pennylane>=0.35
+
+# Uncomment for a shared PostgreSQL database, so accounts and cohorts survive
+# a restart. Without it QuBuild uses SQLite, which on a free host is wiped
+# every time the app sleeps.
+# psycopg[binary]>=3.1
