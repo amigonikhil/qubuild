@@ -1,0 +1,19 @@
+[theme]
+base = "dark"
+primaryColor = "#39DCDC"
+backgroundColor = "#05070D"
+secondaryBackgroundColor = "#0A0F1A"
+textColor = "#E6ECF7"
+
+[server]
+headless = true
+# No file watcher on a deployed copy: nothing edits the source at runtime, and
+# watching costs startup time and background CPU for nothing.
+fileWatcherType = "none"
+
+[client]
+# Hide Streamlit's own Deploy button and menu from visitors.
+toolbarMode = "viewer"
+
+[browser]
+gatherUsageStats = false
