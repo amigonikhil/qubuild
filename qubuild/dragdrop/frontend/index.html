@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<style>
+  :root{
+    --bg:#0A0F1A; --panel:#0D1422; --line:#1B2537; --ink:#E6ECF7;
+    --dim:#8A99B4; --faint:#55627A; --cyan:#39DCDC; --blue:#4C8DFF;
+    --violet:#B08CFF; --amber:#FFB454; --green:#3DD68C; --grey:#8FA3BF;
+  }
+  *{box-sizing:border-box; -webkit-user-select:none; user-select:none}
+  body{margin:0; background:transparent; color:var(--ink);
+       font-family:"IBM Plex Sans",system-ui,-apple-system,sans-serif; font-size:13px}
+
+  .wrap{border:1px solid var(--line); border-radius:10px; background:var(--panel);
+        padding:12px 14px 14px}
+  .hint{color:var(--faint); font-size:11px; margin:0 0 10px;
+        font-family:"IBM Plex Mono",monospace; letter-spacing:.04em}
+  .hint b{color:var(--cyan); font-weight:600}
+
+  /* ---- palette ---- */
+  .pal{display:flex; flex-wrap:wrap; gap:14px; margin-bottom:12px;
+       padding-bottom:12px; border-bottom:1px solid var(--line)}
+  .grp{display:flex; flex-direction:column; gap:5px}
+  .grp .lbl{font-family:"IBM Plex Mono",monospace; font-size:8.5px; letter-spacing:.16em;
+            text-transform:uppercase; color:var(--faint)}
+  .grp .row{display:flex; gap:5px}
+  .chip{width:38px; height:30px; border-radius:6px; border:1px solid var(--line);
+        background:#111A2B; color:var(--ink); display:flex; align-items:center;
+        justify-content:center; font-family:"IBM Plex Mono",monospace; font-size:11.5px;
+        cursor:grab; transition:border-color .12s, transform .08s}
+  .chip:hover{border-color:var(--cyan)}
+  .chip:active{cursor:grabbing; transform:scale(.94)}
+  .chip[data-fam=basis]{border-color:#2A4A7A; color:var(--blue)}
+  .chip[data-fam=phase]{border-color:#4A3A6A; color:var(--violet)}
+  .chip[data-fam=rot]{border-color:#1F5A5A; color:var(--cyan)}
+  .chip[data-fam=ent]{border-color:#6A5220; color:var(--amber)}
+  .chip[data-fam=meas]{border-color:#245C42; color:var(--green)}
+
+  /* ---- grid ---- */
+  .board{position:relative; overflow-x:auto; padding:4px 0 2px}
+  .grid{position:relative}
+  .wire{position:absolute; height:1px; background:var(--line); left:46px}
+  .qlbl{position:absolute; left:0; width:40px; text-align:right;
+        font-family:"IBM Plex Mono",monospace; font-size:11px; color:var(--dim);
+        transform:translateY(-50%)}
+  .cell{position:absolute; border-radius:5px; border:1px dashed transparent}
+  .cell.hot{border-color:var(--cyan); background:#39DCDC14}
+
+  .gate{position:absolute; border-radius:6px; display:flex; align-items:center;
+        justify-content:center; font-family:"IBM Plex Mono",monospace; font-size:11.5px;
+        cursor:grab; background:#111A2B; border:1.5px solid var(--grey); color:var(--ink);
+        transition:box-shadow .12s}
+  .gate:hover{box-shadow:0 0 0 2px #39DCDC33}
+  .gate.sel{border-color:var(--cyan); box-shadow:0 0 0 2px #39DCDC55}
+  .gate.dragging{opacity:.35}
+  .gate[data-fam=basis]{border-color:var(--blue); color:var(--blue)}
+  .gate[data-fam=phase]{border-color:var(--violet); color:var(--violet)}
+  .gate[data-fam=rot]{border-color:var(--cyan); color:var(--cyan)}
+  .gate[data-fam=ent]{border-color:var(--amber); color:var(--amber)}
+  .gate[data-fam=meas]{border-color:var(--green); color:var(--green)}
+  .link{position:absolute; width:1.5px; background:var(--amber)}
+  .dot{position:absolute; width:9px; height:9px; border-radius:50%;
+       background:var(--amber); transform:translate(-50%,-50%)}
+
+  .ghost{position:fixed; pointer-events:none; z-index:99; opacity:.9;
+         width:36px; height:28px; border-radius:6px; background:#111A2B;
+         border:1.5px solid var(--cyan); color:var(--cyan); display:flex;
+         align-items:center; justify-content:center;
+         font-family:"IBM Plex Mono",monospace; font-size:11.5px}
+
+  .trash{margin-top:10px; border:1px dashed var(--line); border-radius:8px;
+         padding:7px; text-align:center; color:var(--faint); font-size:11px;
+         font-family:"IBM Plex Mono",monospace; letter-spacing:.08em}
+  .trash.hot{border-color:#FF6F6F; color:#FF6F6F; background:#FF6F6F12}
+
+  .bar{display:flex; gap:7px; align-items:center; margin-top:11px}
+  button{border-radius:7px; border:1px solid var(--line); background:#111A2B;
+         color:var(--ink); font-size:11.5px; padding:5px 11px; cursor:pointer;
+         font-family:inherit; transition:border-color .12s}
+  button:hover{border-color:var(--cyan)}
+  button.go{border-color:#1E8D98; background:linear-gradient(180deg,#12707A,#0C4E57);
+            color:#EAFDFD; font-weight:500}
+  button:disabled{opacity:.4; cursor:default}
+  .status{margin-left:auto; color:var(--faint); font-size:10.5px;
+          font-family:"IBM Plex Mono",monospace}
+  .status.dirty{color:var(--amber)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <p class="hint">Drag a gate onto a wire &middot; drag a placed gate to <b>move</b> it
+     &middot; drop it on the bin to <b>delete</b> &middot; two-qubit gates ask for a target</p>
+  <div class="pal" id="pal"></div>
+  <div class="board"><div class="grid" id="grid"></div></div>
+  <div class="trash" id="trash">DROP HERE TO DELETE</div>
+  <div class="bar">
+    <button class="go" id="apply" disabled>Apply to circuit</button>
+    <button id="undo">Undo</button>
+    <button id="clear">Clear</button>
+    <span class="status" id="status">in sync</span>
+  </div>
+</div>
+
+<script>
+// ---------------------------------------------------------------- protocol
+// The Streamlit component protocol is three messages. Implementing them by
+// hand avoids an npm toolchain for what is, in total, about twenty lines.
+function send(type, data){
+  window.parent.postMessage(Object.assign({isStreamlitMessage:true, type:type}, data), "*");
+}
+function setHeight(h){ send("streamlit:setFrameHeight", {height:h}); }
+function setValue(v){ send("streamlit:setComponentValue", {value:v, dataType:"json"}); }
+
+let ARGS = null, CIRCUIT = null, HISTORY = [], DIRTY = false;
+
+const FAM = {
+  X:"pauli", Y:"pauli", Z:"pauli", I:"pauli",
+  H:"basis", SX:"basis",
+  S:"phase", SDG:"phase", T:"phase", TDG:"phase", P:"phase", RZ:"phase",
+  RX:"rot", RY:"rot", U:"rot",
+  CX:"ent", CY:"ent", CZ:"ent", CH:"ent", CRZ:"ent", CRY:"ent", CP:"ent",
+  SWAP:"ent", CCX:"ent", CSWAP:"ent",
+  MEASURE:"meas", BARRIER:"meta"
+};
+
+const CW = 54, RH = 46, X0 = 46, Y0 = 26, GW = 38, GH = 30;
+
+function cellX(c){ return X0 + c*CW + (CW-GW)/2; }
+function cellY(r){ return Y0 + r*RH - GH/2; }
+function rowOf(y){ return Math.round((y - Y0) / RH); }
+function colOf(x){ return Math.floor((x - X0) / CW); }
+
+// ---------------------------------------------------------------- render
+function drawPalette(){
+  const pal = document.getElementById("pal");
+  pal.innerHTML = "";
+  ARGS.palette.forEach(([label, gates]) => {
+    const g = document.createElement("div"); g.className = "grp";
+    const l = document.createElement("div"); l.className = "lbl"; l.textContent = label;
+    const row = document.createElement("div"); row.className = "row";
+    gates.forEach(([name, show]) => {
+      const c = document.createElement("div");
+      c.className = "chip"; c.textContent = show;
+      c.dataset.gate = name; c.dataset.fam = FAM[name] || "pauli";
+      c.addEventListener("pointerdown", e => startDrag(e, {gate:name, label:show}));
+      row.appendChild(c);
+    });
+    g.appendChild(l); g.appendChild(row); pal.appendChild(g);
+  });
+}
+
+function drawGrid(){
+  const grid = document.getElementById("grid");
+  const rows = CIRCUIT.qubits, cols = ARGS.cols;
+  grid.innerHTML = "";
+  grid.style.height = (Y0 + rows*RH) + "px";
+  grid.style.width  = (X0 + cols*CW + 12) + "px";
+
+  for (let r = 0; r < rows; r++){
+    const w = document.createElement("div");
+    w.className = "wire";
+    w.style.top = (Y0 + r*RH) + "px";
+    w.style.width = (cols*CW) + "px";
+    grid.appendChild(w);
+    const lab = document.createElement("div");
+    lab.className = "qlbl"; lab.textContent = "q" + r;
+    lab.style.top = (Y0 + r*RH) + "px";
+    grid.appendChild(lab);
+    for (let c = 0; c < cols; c++){
+      const cell = document.createElement("div");
+      cell.className = "cell";
+      cell.style.left = cellX(c) + "px"; cell.style.top = cellY(r) + "px";
+      cell.style.width = GW + "px"; cell.style.height = GH + "px";
+      cell.dataset.r = r; cell.dataset.c = c;
+      grid.appendChild(cell);
+    }
+  }
+
+  CIRCUIT.ops.forEach((op, i) => {
+    const spec = ARGS.specs[op.name] || [1,0,0];
+    const col = op.col | 0;
+    const qs = op.qubits;
+    if (qs.length > 1){
+      const lo = Math.min.apply(null, qs), hi = Math.max.apply(null, qs);
+      const link = document.createElement("div");
+      link.className = "link";
+      link.style.left = (X0 + col*CW + CW/2) + "px";
+      link.style.top = (Y0 + lo*RH) + "px";
+      link.style.height = ((hi-lo)*RH) + "px";
+      grid.appendChild(link);
+      for (let k = 0; k < spec[1]; k++){
+        const d = document.createElement("div");
+        d.className = "dot";
+        d.style.left = (X0 + col*CW + CW/2) + "px";
+        d.style.top = (Y0 + qs[k]*RH) + "px";
+        grid.appendChild(d);
+      }
+    }
+    const target = qs[spec[1]] !== undefined ? qs[spec[1]] : qs[0];
+    const el = document.createElement("div");
+    el.className = "gate";
+    el.dataset.fam = FAM[op.name] || "pauli";
+    el.dataset.idx = i;
+    el.style.left = cellX(col) + "px"; el.style.top = cellY(target) + "px";
+    el.style.width = GW + "px"; el.style.height = GH + "px";
+    el.textContent = shortName(op);
+    el.addEventListener("pointerdown", e => startDrag(e, {index:i, gate:op.name}));
+    grid.appendChild(el);
+  });
+  fit();
+}
+
+function shortName(op){
+  const map = {SDG:"S†", TDG:"T†", MEASURE:"M", BARRIER:"|", SWAP:"×", SX:"√X"};
+  let n = map[op.name] || op.name;
+  if (op.params && op.params.length) n = n.replace(/\(.*\)/, "");
+  return n;
+}
+
+function fit(){
+  setHeight(document.body.scrollHeight + 6);
+}
+
+// ---------------------------------------------------------------- dragging
+let drag = null, ghost = null;
+
+function startDrag(e, payload){
+  e.preventDefault();
+  drag = Object.assign({}, payload, {moved:false});
+  ghost = document.createElement("div");
+  ghost.className = "ghost";
+  ghost.textContent = payload.label ||
+      (CIRCUIT.ops[payload.index] ? shortName(CIRCUIT.ops[payload.index]) : "?");
+  document.body.appendChild(ghost);
+  moveGhost(e);
+  if (payload.index !== undefined){
+    const el = document.querySelector('.gate[data-idx="' + payload.index + '"]');
+    if (el) el.classList.add("dragging");
+  }
+  window.addEventListener("pointermove", onMove);
+  window.addEventListener("pointerup", onUp, {once:true});
+}
+
+function moveGhost(e){
+  ghost.style.left = (e.clientX - 18) + "px";
+  ghost.style.top  = (e.clientY - 14) + "px";
+}
+
+function onMove(e){
+  if (!drag) return;
+  drag.moved = true;
+  moveGhost(e);
+  document.querySelectorAll(".cell.hot").forEach(c => c.classList.remove("hot"));
+  const trash = document.getElementById("trash");
+  trash.classList.toggle("hot", overTrash(e));
+  const cell = cellAt(e);
+  if (cell && !overTrash(e)) cell.classList.add("hot");
+}
+
+function overTrash(e){
+  const r = document.getElementById("trash").getBoundingClientRect();
+  return e.clientX >= r.left && e.clientX <= r.right &&
+         e.clientY >= r.top  && e.clientY <= r.bottom;
+}
+
+function cellAt(e){
+  const els = document.elementsFromPoint(e.clientX, e.clientY);
+  for (const el of els) if (el.classList && el.classList.contains("cell")) return el;
+  return null;
+}
+
+function onUp(e){
+  window.removeEventListener("pointermove", onMove);
+  document.querySelectorAll(".cell.hot").forEach(c => c.classList.remove("hot"));
+  document.getElementById("trash").classList.remove("hot");
+  if (ghost) { ghost.remove(); ghost = null; }
+  const d = drag; drag = null;
+  if (!d) return;
+
+  if (d.index !== undefined && overTrash(e)) { remove(d.index); return; }
+  const cell = cellAt(e);
+  if (!cell){ drawGrid(); return; }
+  const r = +cell.dataset.r, c = +cell.dataset.c;
+  if (d.index !== undefined) move(d.index, r, c); else place(d.gate, r, c);
+}
+
+// ---------------------------------------------------------------- edits
+function snapshot(){ HISTORY.push(JSON.stringify(CIRCUIT)); if (HISTORY.length > 40) HISTORY.shift(); }
+function touched(){
+  DIRTY = true;
+  const s = document.getElementById("status");
+  s.textContent = "unapplied changes"; s.className = "status dirty";
+  document.getElementById("apply").disabled = false;
+  drawGrid();
+}
+
+function place(name, row, col){
+  const spec = ARGS.specs[name] || [1,0,0];
+  snapshot();
+  let qubits = [row];
+  if (spec[0] === 2)      qubits = [row, row + 1 < CIRCUIT.qubits ? row + 1 : row - 1];
+  else if (spec[0] === 3) qubits = pickThree(row);
+  if (qubits.some(q => q < 0 || q >= CIRCUIT.qubits) || new Set(qubits).size !== qubits.length){
+    HISTORY.pop();
+    flash("needs " + spec[0] + " wires");
+    return;
+  }
+  const params = spec[2] ? Array(spec[2]).fill(Math.PI / 2) : [];
+  CIRCUIT.ops.push({name:name, qubits:qubits, params:params, col:col});
+  touched();
+}
+
+function pickThree(row){
+  const n = CIRCUIT.qubits;
+  if (row + 2 < n) return [row, row+1, row+2];
+  if (row - 1 >= 0 && row + 1 < n) return [row-1, row, row+1];
+  if (row - 2 >= 0) return [row-2, row-1, row];
+  return [-1];
+}
+
+function move(index, row, col){
+  const op = CIRCUIT.ops[index];
+  if (!op) return;
+  const spec = ARGS.specs[op.name] || [1,0,0];
+  snapshot();
+  const anchor = op.qubits[spec[1]] !== undefined ? op.qubits[spec[1]] : op.qubits[0];
+  const shift = row - anchor;
+  const moved = op.qubits.map(q => q + shift);
+  if (moved.some(q => q < 0 || q >= CIRCUIT.qubits)){
+    HISTORY.pop(); flash("off the grid"); drawGrid(); return;
+  }
+  op.qubits = moved; op.col = col;
+  touched();
+}
+
+function remove(index){ snapshot(); CIRCUIT.ops.splice(index, 1); touched(); }
+
+function flash(msg){
+  const s = document.getElementById("status");
+  s.textContent = msg; s.className = "status dirty";
+  setTimeout(() => { if (!DIRTY){ s.textContent = "in sync"; s.className = "status"; } }, 1400);
+}
+
+// ---------------------------------------------------------------- wiring
+document.getElementById("apply").addEventListener("click", () => {
+  DIRTY = false;
+  document.getElementById("apply").disabled = true;
+  const s = document.getElementById("status");
+  s.textContent = "applied"; s.className = "status";
+  // stamp makes two identical edits distinct, so Streamlit sees the second one
+  setValue({qubits:CIRCUIT.qubits, ops:CIRCUIT.ops, stamp:Date.now()});
+});
+document.getElementById("undo").addEventListener("click", () => {
+  if (!HISTORY.length) return;
+  CIRCUIT = JSON.parse(HISTORY.pop());
+  touched();
+});
+document.getElementById("clear").addEventListener("click", () => {
+  snapshot(); CIRCUIT.ops = []; touched();
+});
+
+window.addEventListener("message", ev => {
+  const d = ev.data;
+  if (!d || d.type !== "streamlit:render") return;
+  ARGS = d.args;
+  // Only reset from the server while there is nothing unapplied, otherwise a
+  // rerun triggered by another widget would throw away the learner's edits.
+  if (!DIRTY){
+    CIRCUIT = JSON.parse(JSON.stringify(ARGS.circuit));
+    HISTORY = [];
+    drawPalette();
+    drawGrid();
+  }
+});
+
+send("streamlit:componentReady", {apiVersion:1});
+setHeight(360);
+</script>
+</body>
+</html>
